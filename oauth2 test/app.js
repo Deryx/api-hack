@@ -50,68 +50,95 @@ $(function() {
     parameterMap.oauth_signature = OAuth.percentEncode(parameterMap.oauth_signature);
     console.log(parameterMap);
 
-    var delay = 2000;
-    var geocoder;
+    // var delay = 2000;
+    var geocoder = new google.maps.Geocoder();;
     var map;
-    function initialize() {
-        geocoder = new google.maps.Geocoder();
-        // var latlng = new google.maps.LatLng(-34.397, 150.644);
-        // var mapOptions = {
-        // zoom: 8,
-        // center: latlng
-        // }
-        // map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
-    }
+    
+    
+    function codeAddress(address, next) {
+        /* TODO: assign address var to business variables */ 
+        geocoder.geocode({'address':address}, function(results, status)
+            {   
+                // sets the current business to geolocate as a jQuery object
+                var $businessGeo = $('p#business-'+nextAddress);
 
-    function codeAddress(address) {
-        /* TODO: assign address var to business variables */
-        var address = address;
-        
-            return geocoder.geocode( { 'address': address}, function(results, status) {
-                
-                /*marker for google maps*/
+                /*if that worked*/
                 if (status == google.maps.GeocoderStatus.OK) {
-                    
-                        console.log("called it!");
-                        return results[0].geometry.location
-                
-                
-                /* The below will be incorporated  */
-                // map.setCenter(results[0].geometry.location);
-                // var marker = new google.maps.Marker({
-                //     map: map,
-                //     position: results[0].geometry.location
-                // });
-                } else {
-                    alert("Geocode was not successful for the following reason: " + status);
+                    /*we assume the first Markerer is the one we want*/
+                    console.log("called codeAddress!");
+                    newAddressesGeoLocated[nextAddress] = results[0].geometry.location;
+                    // console.log(newAddressesGeoLocated[nextAddress]);
+                    // Attach this info to the paragra
+                    $businessGeo.html($businessGeo.html()+" " + results[0].geometry.location + ' delay ' + delay);
+                    console.log(newAddressesGeoLocated);
+                    /* TODO set geomarkers with address*/
                 }
-            });
-
-        
+                // ========== Decode the error status ===========
+                else {
+                    //  === if we're sending the requests too fast, try this one again and increase the delay
+                    if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT /*or status == */) {
+                        nextAddress --;
+                        delay++;
+                    } else {
+                        var reason ="Code "+status;
+                        
+                        // console.log(businessGeo);
+                        $businessGeo.html($businessGeo.html()+ ' error=' + reason + '(delay = '+ delay+' ms)');
+                    }
+                }
+                next();
+            }
+        );
     }
-    /*actual callback function that displays image property of first yelp business returned from search query*/
+    
+    function theNext() {
+        if (nextAddress < Globaladdresses.length) {
+            setTimeout(function() {
+                codeAddress(Globaladdresses[nextAddress],theNext)
+            },delay);
+            nextAddress++;
+        } else {
+            console.log("finito");
+            console.log(newAddressesGeoLocated);
+        }
+    }
+
+
+    // no no
+    var Globaladdresses = [];
+
     function cb (data) {
-        console.log(data);
-    	
-        for (var i = data.businesses.length - 1; i >= 0; i--) {
+        var addresses = [];
+    	console.log(data.businesses);
+
+        y = data.businesses.length - 1;
+        for (var i = 0; i <= y; i++) {
             // assign local variables address and city for geolocation
             var address = data.businesses[i].location.address[0];
-            var city = data.businesses[i].location.city
-            var country = data.businesses[i].location.country_code;
-            
-            setTimeout(function(data, address, city, country){
-                $('#foo').append('<p><img src=' + 
-                    data.businesses[i].image_url + ' alt="yelp photo">' + 
-                    address + ' ' + 
-                    city + ' ' +
-                    country + ' ' +
-                    codeAddress(address+' '+city+' '+ country) + ' ' +
-                     ' </p>');
-            }, delay);
+            var city = data.businesses[i].location.city;
+            var state = data.businesses[i].location.state_code;
+            var zip = data.businesses[i].location.postal_code;
+
+            var count = i+1
+            addresses[i] = address + ' ' + city + ' ' + state + ' ' + zip;  
+
+            $('#foo').append('<p id="business-'+(i+1)+'">' + count +') <img src=' + 
+                data.businesses[i].image_url + ' alt="yelp photo"> ' + 
+                addresses[i]+/*
+                codeAddress(address+' '+city+' '+ country) + ' ' +*/
+                 ' </p>');
         }
-         // $('#foo').append('<img src=' + data.businesses[0].image_url + ' alt="yelp photo" height="250">');
-         // console.log("hi");
+        
+        
+
+        return addresses
     }
+
+    var delay = 100;
+    var nextAddress = 0;
+    var newAddressesGeoLocated = [];
+
+    
 
     // specifically, OAuth will not allow for non specific or randomly generated json call back name by convenience methods i.e. $.get wouldn't work
     // user must specifiy the callback method name 
@@ -122,21 +149,19 @@ $(function() {
     	dataType: 'jsonp',
     	// jsonpCallback: 'cb',
     	success: function(data, textStats, XMLHttpRequest) {
-            initialize();
-            cb(data);
-            console.log(data);
-    		console.log(data.businesses[0].image_url);
-            // $('#foo').append('<img src=' + data.businesses[0].image_url + ' alt="yelp photo" height="250">');
-    		// $('body').text("hi");
+            Globaladdresses = cb(data);
+            console.log(Globaladdresses);
     	}
     })
     .done(function() {
-    	console.log("success");
+        console.log("success");
     })
-    .fail(function() {
+    .done(function() {
     	console.log("error");
     })
     .always(function() {
     	console.log("complete");
+        theNext();
+        console.log(newAddressesGeoLocated);
     });
 });    
